@@ -8,9 +8,16 @@
 from utils.data_utils import get_data, randomize, get_next_batch
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
+
+from utils.loss_utils import euclidean_distance, contrastive_loss
 from utils.network_utils import conv_2d, max_pool, dropout, flatten_layer, fc_layer
+import numpy as np
+from scipy.spatial.distance import cdist
+
 
 # data parameters
+from utils.plot_utils import show_image
+
 TOTAL_SAMPLE_SIZE = 10000
 X, Y = get_data(TOTAL_SAMPLE_SIZE)
 x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2)
@@ -18,8 +25,8 @@ x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_siz
 H, W = x_train.shape[-2], x_train.shape[-1]
 
 # Hyper-parameters
-EPOCHS = 20
-BATCH_SIZE = 128
+EPOCHS = 10
+BATCH_SIZE = 20
 LEARNING_RATE = 0.001
 DISPLAY_FREQ = 100
 LOGS_PATH = "./logs"  # path to the folder that we want to save the logs for Tensorboard
@@ -42,14 +49,6 @@ def build_base_network(x, num_kernels=[6, 12], k=3, is_train=True):
     return x
 
 
-def euclidean_distance(vec1, vec2):
-    return tf.sqrt(tf.reduce_sum(tf.square(vec1 - vec2), axis=1, keepdims=True))
-
-
-def contrastive_loss(y_true, y_pred, margin=1):
-    return tf.reduce_mean(y_true * tf.square(y_pred) + (1 - y_true) * tf.square(tf.maximum(margin - y_pred, 0)))
-
-
 with tf.variable_scope('Input'):
     x1 = tf.placeholder(tf.float32, shape=[None, H, W, 1], name='X1')
     x2 = tf.placeholder(tf.float32, shape=[None, H, W, 1], name='X2')
@@ -66,7 +65,9 @@ with tf.variable_scope('Train'):
     with tf.variable_scope('Optimizer'):
         optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE, name='Adam-op').minimize(loss)
     with tf.variable_scope('Accuracy'):
-        pass
+        y_pred = tf.cast(tf.math.less(d_w, tf.fill(tf.shape(y), 0.5)), tf.float32)
+        correct_prediction = tf.equal(y_pred, y, name='correct_pred')
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
 
 
 # Initialize the variables
@@ -103,14 +104,23 @@ with tf.Session() as sess:
                       format(iteration, loss_batch, acc_batch))
 
         # Run validation after every epoch
-        feed_dict_valid = {x: x_valid, y: y_valid}
+        feed_dict_valid = {x1: x_valid[:, 0].reshape([-1, H, W, 1]),
+                           x2: x_valid[:, 1].reshape([-1, H, W, 1]),
+                           y: y_valid}
         loss_valid, acc_valid = sess.run([loss, accuracy], feed_dict=feed_dict_valid)
         print('---------------------------------------------------------')
         print("Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
               format(epoch + 1, loss_valid, acc_valid))
         print('---------------------------------------------------------')
 
+    my_image = x_test[1, 1, :, :].reshape([1, H, W, 1])
+    my_image = np.repeat(my_image, 1000, axis=0)
+    from_train = x_train[:1000, 1, :, :].reshape([1000, H, W, 1])
+    feed_dict = {x1: my_image, x2: from_train, y: np.zeros((1000, 1))}
+    my_feat, train_feat = sess.run([x1_embed, x2_embed], feed_dict=feed_dict)
+    dist = cdist(my_feat[0, :].reshape(1, 50), train_feat, 'cosine')
+    rank = np.argsort(dist.ravel())
 
-print()
-
-
+    n = 5
+    show_image(rank[:n], from_train)
+    print("retrieved ids:", rank[:n])
