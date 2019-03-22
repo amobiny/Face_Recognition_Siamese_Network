@@ -21,9 +21,9 @@ def read_image(filename, byteorder='>'):
                          ).reshape((int(height), int(width)))
 
 
-def get_data(total_sample_size):
+def get_data(data_path, total_sample_size):
     # read the image
-    image = read_image('data/s' + str(1) + '/' + str(1) + '.pgm', 'rw+')
+    image = read_image(data_path + '/s' + str(1) + '/' + str(1) + '.pgm', 'rw+')
     # reduce the size
     size=2
     image = image[::size, ::size]
@@ -48,8 +48,8 @@ def get_data(total_sample_size):
                 ind2 = np.random.randint(10)
 
             # read the two images
-            img1 = read_image('data/s' + str(i + 1) + '/' + str(ind1 + 1) + '.pgm', 'rw+')
-            img2 = read_image('data/s' + str(i + 1) + '/' + str(ind2 + 1) + '.pgm', 'rw+')
+            img1 = read_image(data_path + '/s' + str(i + 1) + '/' + str(ind1 + 1) + '.pgm', 'rw+')
+            img2 = read_image(data_path + '/s' + str(i + 1) + '/' + str(ind2 + 1) + '.pgm', 'rw+')
 
             # reduce the size
             img1 = img1[::size, ::size]
@@ -59,8 +59,8 @@ def get_data(total_sample_size):
             x_geuine_pair[count, 0, 0, :, :] = img1
             x_geuine_pair[count, 1, 0, :, :] = img2
 
-            # as we are drawing images from the same directory we assign label as 1. (genuine pair)
-            y_genuine[count] = 1
+            # as we are drawing images from the same directory we assign label as 0. (genuine pair)
+            y_genuine[count] = 0
             count += 1
 
     count = 0
@@ -77,16 +77,16 @@ def get_data(total_sample_size):
                 if ind1 != ind2:
                     break
 
-            img1 = read_image('data/s' + str(ind1 + 1) + '/' + str(j + 1) + '.pgm', 'rw+')
-            img2 = read_image('data/s' + str(ind2 + 1) + '/' + str(j + 1) + '.pgm', 'rw+')
+            img1 = read_image(data_path + '/s' + str(ind1 + 1) + '/' + str(j + 1) + '.pgm', 'rw+')
+            img2 = read_image(data_path + '/s' + str(ind2 + 1) + '/' + str(j + 1) + '.pgm', 'rw+')
 
             img1 = img1[::size, ::size]
             img2 = img2[::size, ::size]
 
             x_imposite_pair[count, 0, 0, :, :] = img1
             x_imposite_pair[count, 1, 0, :, :] = img2
-            # as we are drawing images from the different directory we assign label as 0. (imposite pair)
-            y_imposite[count] = 0
+            # as we are drawing images from the different directory we assign label as 1. (imposite pair)
+            y_imposite[count] = 1
             count += 1
 
     # now, concatenate, genuine pairs and imposite pair to get the whole data

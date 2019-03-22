@@ -18,15 +18,16 @@ from scipy.spatial.distance import cdist
 # data parameters
 from utils.plot_utils import show_image
 
+data_path = '/home/cougarnet.uh.edu/amobiny/Desktop/Face_Recognition_Siamese_Network/data'
 TOTAL_SAMPLE_SIZE = 10000
-X, Y = get_data(TOTAL_SAMPLE_SIZE)
+X, Y = get_data(data_path, TOTAL_SAMPLE_SIZE)
 x_train, x_test, y_train, y_test = train_test_split(X, Y, test_size=0.2)
 x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train, test_size=0.2)
 H, W = x_train.shape[-2], x_train.shape[-1]
 
 # Hyper-parameters
-EPOCHS = 10
-BATCH_SIZE = 20
+EPOCHS = 1
+BATCH_SIZE = 2
 LEARNING_RATE = 0.001
 DISPLAY_FREQ = 100
 LOGS_PATH = "./logs"  # path to the folder that we want to save the logs for Tensorboard
@@ -37,7 +38,7 @@ FILTER_SIZE = 3
 m = 1       # margin for the contrastive loss
 
 
-def build_base_network(x, num_kernels=[6, 12], k=3, is_train=True):
+def build_base_network(x, is_train, num_kernels=[6, 12], k=3):
     for i, n_kernel in enumerate(num_kernels):
         x = conv_2d(x, filter_size=k, num_filters=n_kernel, layer_name='conv_'+str(i+1), stride=1, use_relu=True)
         x = max_pool(x, ksize=2, stride=2, name='pool_'+str(i+1))
@@ -53,10 +54,11 @@ with tf.variable_scope('Input'):
     x1 = tf.placeholder(tf.float32, shape=[None, H, W, 1], name='X1')
     x2 = tf.placeholder(tf.float32, shape=[None, H, W, 1], name='X2')
     y = tf.placeholder(tf.float32, shape=[None, 1], name='Y')
+    isTrain = tf.placeholder_with_default(True, shape=(), name="is_train")
 
 with tf.variable_scope('Siamese'):
-    x1_embed = build_base_network(x1)
-    x2_embed = build_base_network(x2)
+    x1_embed = build_base_network(x1, isTrain)
+    x2_embed = build_base_network(x2, isTrain)
 
 with tf.variable_scope('Train'):
     with tf.variable_scope('Loss'):
@@ -65,7 +67,7 @@ with tf.variable_scope('Train'):
     with tf.variable_scope('Optimizer'):
         optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE, name='Adam-op').minimize(loss)
     with tf.variable_scope('Accuracy'):
-        y_pred = tf.cast(tf.math.less(d_w, tf.fill(tf.shape(y), 0.5)), tf.float32)
+        y_pred = tf.cast(tf.math.greater(d_w, tf.fill(tf.shape(y), 0.5)), tf.float32)
         correct_prediction = tf.equal(y_pred, y, name='correct_pred')
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
 
@@ -107,11 +109,22 @@ with tf.Session() as sess:
         feed_dict_valid = {x1: x_valid[:, 0].reshape([-1, H, W, 1]),
                            x2: x_valid[:, 1].reshape([-1, H, W, 1]),
                            y: y_valid}
+
         loss_valid, acc_valid = sess.run([loss, accuracy], feed_dict=feed_dict_valid)
         print('---------------------------------------------------------')
         print("Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
               format(epoch + 1, loss_valid, acc_valid))
         print('---------------------------------------------------------')
+
+    feed_dict_test = {x1: x_test[:, 0].reshape([-1, H, W, 1]),
+                      x2: x_test[:, 1].reshape([-1, H, W, 1]),
+                      y: y_test, isTrain: False}
+
+    loss_test, acc_test = sess.run([loss, accuracy], feed_dict=feed_dict_test)
+    print('---------------------------------------------------------')
+    print("test_loss: {0:.4f}, test_acc: {1:.01%}".format(loss_test, acc_test))
+    print('---------------------------------------------------------')
+
 
     my_image = x_test[1, 1, :, :].reshape([1, H, W, 1])
     my_image = np.repeat(my_image, 1000, axis=0)
